@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import path from "path";
 import { checkBinary } from "./utils";
 
 const execFileAsync = promisify(execFile);
@@ -12,22 +13,20 @@ export async function convertCad(
   // Try ODAFileConverter (Open Design Alliance)
   const odaBin = await checkBinary("ODAFileConverter");
   if (odaBin) {
-    const { dirname, basename, extname } = await import("path");
-    const outDir = dirname(outputPath);
+    const outDir = path.dirname(outputPath);
     const outFmt = targetFormat.toUpperCase();
-    const inFmt = extname(inputPath).slice(1).toUpperCase();
-    await execFileAsync(odaBin, [dirname(inputPath), outDir, inFmt, outFmt, "0", "1", basename(inputPath)]);
+    const inFmt = path.extname(inputPath).slice(1).toUpperCase();
+    await execFileAsync(odaBin, [path.dirname(inputPath), outDir, inFmt, outFmt, "0", "1", path.basename(inputPath)]);
     return;
   }
 
   // Fallback: if converting DWG/DXF to SVG or PDF, try LibreOffice with draw
   const loBin = await findLibreOffice();
   if (loBin && ["SVG","PDF"].includes(targetFormat.toUpperCase())) {
-    const { dirname } = await import("path");
     await execFileAsync(loBin, [
       "--headless",
       "--convert-to", targetFormat.toLowerCase(),
-      "--outdir", dirname(outputPath),
+      "--outdir", path.dirname(outputPath),
       inputPath,
     ]);
     return;

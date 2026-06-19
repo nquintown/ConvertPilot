@@ -51,7 +51,7 @@ export async function convertDocument(
   ]);
 
   const inputBase = path.basename(inputPath, path.extname(inputPath));
-  const generatedPath = path.join(outDir, `${inputBase}.${outFmt}`);
+  const generatedPath = path.join(outDir, inputBase + "." + outFmt);
 
   if (generatedPath !== outputPath) {
     try {
