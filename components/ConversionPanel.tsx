@@ -7,7 +7,7 @@ import CategoryMenu from "./CategoryMenu";
 import { detectCategory } from "@/lib/formats";
 import type { Category } from "@/types";
 
-type ConversionState = "idle" | "uploading" | "converting" | "done" | "error";
+type ConversionState = "idle" | "converting" | "done" | "error";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -26,11 +26,17 @@ export default function ConversionPanel() {
   const [sourceFormat, setSourceFormat] = useState("");
   const [targetFormat, setTargetFormat] = useState("");
   const [state, setState] = useState<ConversionState>("idle");
-  const [progress, setProgress] = useState("");
-  const [downloadId, setDownloadId] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const prevPreview = useRef<string | null>(null);
+
+  // Revoke blob URL when it changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    };
+  }, [downloadUrl]);
 
   useEffect(() => {
     if (prevPreview.current) {
@@ -48,7 +54,7 @@ export default function ConversionPanel() {
 
   const handleFileSelected = useCallback((f: File) => {
     setFile(f);
-    setDownloadId(null);
+    setDownloadUrl(null);
     setDownloadName("");
     setErrorMsg("");
     setState("idle");
@@ -75,30 +81,32 @@ export default function ConversionPanel() {
   const handleConvert = async () => {
     if (!file || !category || !sourceFormat || !targetFormat) return;
 
-    setState("uploading");
-    setProgress("Upload…");
+    setState("converting");
     setErrorMsg("");
 
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error || "Erreur upload");
+      formData.append("sourceFormat", sourceFormat);
+      formData.append("targetFormat", targetFormat);
+      formData.append("category", category);
 
-      setState("converting");
-      setProgress("Conversion en cours…");
+      const res = await fetch("/api/convert", { method: "POST", body: formData });
 
-      const convertRes = await fetch("/api/convert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId: uploadData.fileId, sourceFormat, targetFormat, category }),
-      });
-      const convertData = await convertRes.json();
-      if (!convertRes.ok) throw new Error(convertData.error || "Erreur de conversion");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Erreur de conversion" }));
+        throw new Error(data.error || "Erreur de conversion");
+      }
 
-      setDownloadId(convertData.downloadId);
-      setDownloadName(convertData.filename);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const lastDot = file.name.lastIndexOf(".");
+      const baseName = lastDot > 0 ? file.name.slice(0, lastDot) : file.name;
+      const name = `${baseName}.${targetFormat.toLowerCase()}`;
+
+      setDownloadUrl(url);
+      setDownloadName(name);
       setState("done");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erreur inconnue");
@@ -107,6 +115,7 @@ export default function ConversionPanel() {
   };
 
   const handleReset = () => {
+    setDownloadUrl(null);
     setFile(null);
     setPreview(null);
     setCategory(null);
@@ -114,13 +123,11 @@ export default function ConversionPanel() {
     setSourceFormat("");
     setTargetFormat("");
     setState("idle");
-    setProgress("");
-    setDownloadId(null);
     setDownloadName("");
     setErrorMsg("");
   };
 
-  const isConverting = state === "uploading" || state === "converting";
+  const isConverting = state === "converting";
   const canConvert = !!file && !!category && !!sourceFormat && !!targetFormat && !isConverting;
 
   return (
@@ -206,7 +213,7 @@ export default function ConversionPanel() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    {progress}
+                    Conversion en cours…
                   </>
                 ) : (
                   <>
@@ -222,7 +229,7 @@ export default function ConversionPanel() {
               </button>
 
               {/* Success */}
-              {state === "done" && downloadId && (
+              {state === "done" && downloadUrl && (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -237,7 +244,7 @@ export default function ConversionPanel() {
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <a
-                      href={`/api/download/${downloadId}`}
+                      href={downloadUrl}
                       download={downloadName}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 transition-colors"
                     >
