@@ -15,6 +15,7 @@ export interface FormatCategory {
   label: string;
   icon: string;
   formats: string[];
+  popular: string[];
 }
 
 export interface ConversionJob {
