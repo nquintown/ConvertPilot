@@ -5,6 +5,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ConvertPilot – Convertisseur de fichiers en ligne",
   description: "Convertissez vos fichiers image, vidéo, audio, document et bien plus encore – gratuitement et sans inscription.",
+  other: {
+    // AdSense site ownership verification — required for Google crawler
+    "google-adsense-account": "ca-pub-8073783780020241",
+  },
 };
 
 export default function RootLayout({
